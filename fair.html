@@ -1,0 +1,373 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carmelo's FAIR Risk Assessment & Monte Carlo Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        .input-cell { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; }
+        .input-cell:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+    </style>
+</head>
+<body class="p-6 md:p-12 text-gray-800">
+
+    <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="bg-blue-900 text-white p-6">
+            <h1 class="text-3xl font-bold">Carmelo's FAIR Risk Assessment & Monte Carlo Simulator</h1>
+            <p class="mt-2 text-blue-200">Fill in the Minimum, Most Likely, and Maximum values for each factor based on the FAIR ontology. 
+            </br>Click the button to run a Monte Carlo simulation (10,000 iterations) to calculate your Annualized Risk.</p>
+        </div>
+
+        <div class="p-6">
+            <form id="fairForm" class="space-y-6">
+                <!-- Table Header -->
+                <div class="grid grid-cols-12 gap-4 font-semibold text-gray-600 border-b pb-2 hidden md:grid">
+                    <div class="col-span-6">FAIR Assessment Question (Factor)</div>
+                    <div class="col-span-2 text-center">Minimum</div>
+                    <div class="col-span-2 text-center">Most Likely</div>
+                    <div class="col-span-2 text-center">Maximum</div>
+                </div>
+
+                <!-- Threat Event Frequency -->
+                <div class="grid grid-cols-12 gap-4 items-center bg-gray-50 p-4 rounded-lg">
+                    <div class="col-span-12 md:col-span-6">
+                        <label class="font-bold text-gray-800 block">Threat Event Frequency (TEF)</label>
+                        <span class="text-sm text-gray-500">How many times per year is a threat agent expected to act against this asset? (e.g., 1, 10, 50)</span>
+                    </div>
+                    <div class="col-span-4 md:col-span-2"><input type="number" id="tef_min" class="input-cell text-center" value="1" step="any" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="number" id="tef_likely" class="input-cell text-center" value="10" step="any" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="number" id="tef_max" class="input-cell text-center" value="50" step="any" required></div>
+                </div>
+
+                <!-- Vulnerability -->
+                <div class="grid grid-cols-12 gap-4 items-center p-4 rounded-lg">
+                    <div class="col-span-12 md:col-span-6">
+                        <label class="font-bold text-gray-800 block">Vulnerability (%)</label>
+                        <span class="text-sm text-gray-500">What is the probability (0-100%) that the asset's controls will fail when the threat acts?</span>
+                    </div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="vuln_min" class="input-cell text-center" value="5%" onblur="formatVulnInput(this)" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="vuln_likely" class="input-cell text-center" value="20%" onblur="formatVulnInput(this)" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="vuln_max" class="input-cell text-center" value="60%" onblur="formatVulnInput(this)" required></div>
+                </div>
+
+                <!-- Primary Loss -->
+                <div class="grid grid-cols-12 gap-4 items-center bg-gray-50 p-4 rounded-lg">
+                    <div class="col-span-12 md:col-span-6">
+                        <label class="font-bold text-gray-800 block">Primary Loss Magnitude ($)</label>
+                        <span class="text-sm text-gray-500">What is the direct financial loss incurred per successful incident? (Response, replacement, etc.)</span>
+                    </div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="pl_min" class="input-cell text-center" value="$10,000" onblur="formatCurrencyInput(this)" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="pl_likely" class="input-cell text-center" value="$50,000" onblur="formatCurrencyInput(this)" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="pl_max" class="input-cell text-center" value="$200,000" onblur="formatCurrencyInput(this)" required></div>
+                </div>
+
+                <!-- Secondary Loss -->
+                <div class="grid grid-cols-12 gap-4 items-center p-4 rounded-lg">
+                    <div class="col-span-12 md:col-span-6">
+                        <label class="font-bold text-gray-800 block">Secondary Loss Magnitude ($)</label>
+                        <span class="text-sm text-gray-500">What is the indirect financial loss per incident? (Fines, reputation damage, judgments)</span>
+                    </div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="sl_min" class="input-cell text-center" value="$0" onblur="formatCurrencyInput(this)" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="sl_likely" class="input-cell text-center" value="$10,000" onblur="formatCurrencyInput(this)" required></div>
+                    <div class="col-span-4 md:col-span-2"><input type="text" id="sl_max" class="input-cell text-center" value="$500,000" onblur="formatCurrencyInput(this)" required></div>
+                </div>
+
+                <div class="text-center mt-8">
+                    <button type="button" onclick="runSimulation()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                        Run Monte Carlo Simulation
+                    </button>
+                </div>
+            </form>
+            
+            <div id="errorMsg" class="hidden mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert"></div>
+
+            <!-- Results Section -->
+            <div id="resultsArea" class="hidden mt-10 border-t pt-8">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">Simulation Results (10,000 Iterations)</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-green-50 p-6 rounded-lg border border-green-200 shadow-sm text-center">
+                        <h3 class="text-green-800 font-semibold mb-2">Average Annual Risk</h3>
+                        <p id="avgRisk" class="text-3xl font-bold text-green-600">$0</p>
+                    </div>
+                    <div class="bg-yellow-50 p-6 rounded-lg border border-yellow-200 shadow-sm text-center">
+                        <h3 class="text-yellow-800 font-semibold mb-2">Median Annual Risk</h3>
+                        <p id="medianRisk" class="text-3xl font-bold text-yellow-600">$0</p>
+                    </div>
+                    <div class="bg-red-50 p-6 rounded-lg border border-red-200 shadow-sm text-center">
+                        <h3 class="text-red-800 font-semibold mb-2">90th Percentile Risk (Worst Case)</h3>
+                        <p id="percentileRisk" class="text-3xl font-bold text-red-600">$0</p>
+                    </div>
+                </div>
+
+                <div class="w-full bg-white p-4 border rounded-lg shadow-sm">
+                    <canvas id="riskChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentChart = null;
+
+        // Parse input value stripping non-numeric formatting characters like commas, percent signs, and dollar signs
+        function parseInputValue(id) {
+            const rawVal = document.getElementById(id).value.toString().replace(/[,%$]/g, '');
+            return parseFloat(rawVal);
+        }
+
+        // Format user input with dollar sign and standard commas on blur
+        function formatCurrencyInput(input) {
+            let num = parseFloat(input.value.replace(/[^0-9.]/g, ''));
+            if (!isNaN(num)) {
+                input.value = '$' + num.toLocaleString('en-US');
+            }
+        }
+
+        // Format vulnerability input with percent sign on blur
+        function formatVulnInput(input) {
+            let num = parseFloat(input.value.replace(/[,%]/g, ''));
+            if (!isNaN(num)) {
+                input.value = num + '%';
+            }
+        }
+
+        // Triangular distribution random number generator
+        function randomTriangular(min, likely, max) {
+            if (min === max) return min;
+            let u = Math.random();
+            let f = (likely - min) / (max - min);
+            if (u <= f) {
+                return min + Math.sqrt(u * (max - min) * (likely - min));
+            } else {
+                return max - Math.sqrt((1 - u) * (max - min) * (max - likely));
+            }
+        }
+
+        // Format currency
+        const formatter = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: 0
+        });
+
+        function runSimulation() {
+            const errorMsg = document.getElementById('errorMsg');
+            errorMsg.classList.add('hidden');
+
+            // Gather inputs
+            const inputs = {
+                tef: { min: parseInputValue('tef_min'), likely: parseInputValue('tef_likely'), max: parseInputValue('tef_max') },
+                vuln: { min: parseInputValue('vuln_min')/100, likely: parseInputValue('vuln_likely')/100, max: parseInputValue('vuln_max')/100 },
+                pl: { min: parseInputValue('pl_min'), likely: parseInputValue('pl_likely'), max: parseInputValue('pl_max') },
+                sl: { min: parseInputValue('sl_min'), likely: parseInputValue('sl_likely'), max: parseInputValue('sl_max') }
+            };
+
+            // Basic validation
+            for (const key in inputs) {
+                if (isNaN(inputs[key].min) || isNaN(inputs[key].likely) || isNaN(inputs[key].max)) {
+                    errorMsg.innerText = "Error: Please enter valid numbers for all fields.";
+                    errorMsg.classList.remove('hidden');
+                    return;
+                }
+                if (inputs[key].min > inputs[key].likely || inputs[key].likely > inputs[key].max) {
+                    errorMsg.innerText = "Error: Please ensure that Minimum <= Most Likely <= Maximum for all fields.";
+                    errorMsg.classList.remove('hidden');
+                    return;
+                }
+            }
+
+            const iterations = 10000;
+            let results = [];
+            let totalRisk = 0;
+
+            // Monte Carlo Loop
+            for (let i = 0; i < iterations; i++) {
+                let sim_tef = randomTriangular(inputs.tef.min, inputs.tef.likely, inputs.tef.max);
+                let sim_vuln = randomTriangular(inputs.vuln.min, inputs.vuln.likely, inputs.vuln.max);
+                let sim_pl = randomTriangular(inputs.pl.min, inputs.pl.likely, inputs.pl.max);
+                let sim_sl = randomTriangular(inputs.sl.min, inputs.sl.likely, inputs.sl.max);
+
+                // FAIR Math: Risk = (TEF * Vulnerability) * (Primary Loss + Secondary Loss)
+                let lossEventFrequency = sim_tef * sim_vuln;
+                let lossMagnitude = sim_pl + sim_sl;
+                let annualizedRisk = lossEventFrequency * lossMagnitude;
+
+                results.push(annualizedRisk);
+                totalRisk += annualizedRisk;
+            }
+
+            // Statistics
+            results.sort((a, b) => a - b);
+            const avgRisk = totalRisk / iterations;
+            const medianRisk = results[Math.floor(iterations * 0.5)];
+            const p90Risk = results[Math.floor(iterations * 0.9)];
+
+            // Update UI
+            document.getElementById('avgRisk').innerText = formatter.format(avgRisk);
+            document.getElementById('medianRisk').innerText = formatter.format(medianRisk);
+            document.getElementById('percentileRisk').innerText = formatter.format(p90Risk);
+            document.getElementById('resultsArea').classList.remove('hidden');
+
+            // Generate Histogram Data
+            drawChart(results, medianRisk);
+        }
+
+        // Plugin to render a dashed vertical line at the median value
+        const medianLinePlugin = {
+            id: 'medianLine',
+            afterDraw: (chart) => {
+                const opts = chart.config.options.plugins.medianLine;
+                if (!opts || opts.value === undefined) return;
+
+                const ctx = chart.ctx;
+                const xAxis = chart.scales.x;
+                const yAxis = chart.scales.y;
+                const { value, min, max, binCount } = opts;
+
+                if (binCount <= 0 || max === min) return;
+
+                const binSize = (max - min) / binCount;
+                const fracIndex = (value - min) / binSize - 0.5;
+
+                let xPos;
+                if (fracIndex <= 0) {
+                    const step = xAxis.getPixelForValue(1) - xAxis.getPixelForValue(0);
+                    xPos = xAxis.getPixelForValue(0) + fracIndex * step;
+                } else if (fracIndex >= binCount - 1) {
+                    const step = xAxis.getPixelForValue(binCount - 1) - xAxis.getPixelForValue(binCount - 2);
+                    xPos = xAxis.getPixelForValue(binCount - 1) + (fracIndex - (binCount - 1)) * step;
+                } else {
+                    const i0 = Math.floor(fracIndex);
+                    const i1 = i0 + 1;
+                    const t = fracIndex - i0;
+                    const p0 = xAxis.getPixelForValue(i0);
+                    const p1 = xAxis.getPixelForValue(i1);
+                    xPos = p0 + t * (p1 - p0);
+                }
+
+                xPos = Math.max(xAxis.left, Math.min(xAxis.right, xPos));
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([6, 4]);
+                ctx.moveTo(xPos, yAxis.top);
+                ctx.lineTo(xPos, yAxis.bottom);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#d97706';
+                ctx.stroke();
+
+                // Draw labeled badge at top of line
+                const labelText = 'Median: ' + formatter.format(value);
+                ctx.font = '600 12px sans-serif';
+                const textWidth = ctx.measureText(labelText).width;
+                
+                ctx.fillStyle = '#fef3c7';
+                ctx.strokeStyle = '#d97706';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([]);
+                const badgeX = Math.min(Math.max(xPos - textWidth / 2 - 6, xAxis.left), xAxis.right - textWidth - 12);
+                const badgeY = yAxis.top + 6;
+                ctx.beginPath();
+                if (ctx.roundRect) {
+                    ctx.roundRect(badgeX, badgeY, textWidth + 12, 22, 4);
+                } else {
+                    ctx.rect(badgeX, badgeY, textWidth + 12, 22);
+                }
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#92400e';
+                ctx.textAlign = 'left';
+                ctx.fillText(labelText, badgeX + 6, badgeY + 15);
+                ctx.restore();
+            }
+        };
+
+        Chart.register(medianLinePlugin);
+
+        function drawChart(data, medianRisk) {
+            const min = data[0];
+            const max = data[data.length - 1];
+            const binCount = 40;
+            const binSize = (max - min) / binCount;
+            let bins = new Array(binCount).fill(0);
+            let labels = [];
+
+            for(let i=0; i<binCount; i++) {
+                labels.push(formatter.format(min + (i * binSize)));
+            }
+
+            data.forEach(val => {
+                let binIndex = Math.floor((val - min) / binSize);
+                if (binIndex >= binCount) binIndex = binCount - 1;
+                bins[binIndex]++;
+            });
+
+            // Convert iteration counts into percentage probabilities
+            const totalIterations = data.length;
+            const binPercentages = bins.map(count => (count / totalIterations) * 100);
+
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            currentChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Probability (%)',
+                        data: binPercentages,
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Annualized Risk (USD)' },
+                            ticks: { maxTicksLimit: 10 }
+                        },
+                        y: {
+                            title: { display: true, text: 'Probability (% of 10,000 simulations)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        medianLine: {
+                            value: medianRisk,
+                            min: min,
+                            max: max,
+                            binCount: binCount
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) { return 'Risk: ~' + context[0].label; },
+                                label: function(context) {
+                                    const pct = context.raw.toFixed(1);
+                                    const count = bins[context.dataIndex];
+                                    return `Probability: ${pct}% (${count.toLocaleString()} simulated years)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
